@@ -1,30 +1,23 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"net/http"
+	"os"
+	"os/signal"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/averek7/order-api/application"
 )
 
 func main() {
-	router := chi.NewRouter()
-	router.Use(middleware.Logger)
+	app := application.New()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()  //Should be called before app.Start(ctx) to avoid goroutine leak
 
-	router.Get("/hello", basicHandler)
-
-	server := &http.Server{
-		Addr:    ":3000",
-		Handler: http.HandlerFunc(basicHandler),
-	}
-
-	err := server.ListenAndServe()
+	err := app.Start(ctx)
 	if err != nil {
-		fmt.Println("Failed to listen to server", err)
+		fmt.Printf("Failed to start application: %v\n", err)
 	}
-}
 
-func basicHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello World"))
+	cancel()
 }
