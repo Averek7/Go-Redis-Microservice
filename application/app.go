@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -33,10 +34,18 @@ func (app *App) Start(ctx context.Context) error {
 		return fmt.Errorf("Failed to listen to redis: %w", err)
 	}
 
+	// The `defer func() { ... }()` statement is deferring the execution of the enclosed function until the
+	// surrounding function (`Start()`) returns.
+	defer func() {
+		if err := app.rdb.Close(); err != nil {
+			fmt.Printf("Failed to close redis: %v\n", err)
+		}
+	}()
+
 	fmt.Println("Starting Server...")
 	ch := make(chan error, 1) // channel to receive error from server
 
-	go func() {
+	go func() { // go routine to start server
 		err = server.ListenAndServe()
 		if err != nil {
 			ch <- fmt.Errorf("Failed to listen to server: %w", err)
@@ -44,5 +53,13 @@ func (app *App) Start(ctx context.Context) error {
 		close(ch)
 	}()
 
-	return nil
+	select {
+	case err = <-ch:
+		return err
+	case <-ctx.Done(): //block is triggered when the context passed to the `Start()` method is canceled or times out. It is used to gracefully shutdown the server.
+		timeout, cancel := context.WithTimeout(context.Background(), time.Second*10)
+		defer cancel()
+		return server.Shutdown(timeout)
+
+	}
 }
