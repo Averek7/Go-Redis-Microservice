@@ -10,7 +10,8 @@ import (
 )
 
 func main() {
-	app := application.New()
+	app := application.New(application.LoadConfig())
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel() //Should be called before app.Start(ctx) to avoid goroutine leak
 
