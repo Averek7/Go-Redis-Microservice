@@ -43,12 +43,14 @@ func (r *RedisRepo) Insert(ctx context.Context, order model.Order) error {
 	return nil
 }
 
+var ErrNotExist = errors.New("order does not exist")
+
 func (r *RedisRepo) FindById(ctx context.Context, orderId uint64) (model.Order, error) {
 	key := OrderIdKey(orderId)                   // create key for redis
 	data, err := r.Client.Get(ctx, key).Result() // get order from redis
 
 	if errors.Is(err, redis.Nil) {
-		return model.Order{}, fmt.Errorf("Order not found: %w", err)
+		return model.Order{}, ErrNotExist
 	} else if err != nil {
 		return model.Order{}, fmt.Errorf("Failed to get order: %w", err)
 	}
@@ -71,7 +73,7 @@ func (r *RedisRepo) DeleteById(ctx context.Context, orderId uint64) error {
 	err := txn.Del(ctx, key).Err() // delete order from redis
 	if errors.Is(err, redis.Nil) {
 		txn.Discard()
-		return fmt.Errorf("Order not found: %w", err)
+		return ErrNotExist
 	} else if err != nil {
 		txn.Discard()
 		return fmt.Errorf("Failed to get order: %w", err)
@@ -95,10 +97,10 @@ func (r *RedisRepo) Update(ctx context.Context, order model.Order) error {
 	}
 
 	key := OrderIdKey(order.OrderID)                      // create key for redis
-	err = r.Client.SetNX(ctx, key, string(data), 0).Err() //  update order in redis
+	err = r.Client.SetXX(ctx, key, string(data), 0).Err() //  update order in redis
 
 	if errors.Is(err, redis.Nil) {
-		return fmt.Errorf("Order not found: %w", err)
+		return ErrNotExist
 	} else if err != nil {
 		return fmt.Errorf("Failed to insert order: %w", err)
 	}
